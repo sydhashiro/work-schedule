@@ -1,45 +1,86 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
-  // for local development
   url      = env("DATABASE_URL")
-  // for Vercel
-  // url       = env("POSTGRES_PRISMA_URL")
-  // directUrl = env("POSTGRES_URL_NON_POOLING")
-}
-
-enum Role {
-  USER
-  ADMIN
 }
 
 model User {
-  id       Int    @id @default(autoincrement())
-  email    String @unique
-  password String
-  role     Role   @default(USER)
+  id        String          @id @default(cuid())
+  email     String          @unique
+  name      String?
+  hashedPassword String          // ← Add this line
+  role      Role            @default(MANAGER)
+  schedules ScheduleEntry[] @relation("UserSchedules")
 }
 
-enum Condition {
-  excellent
-  good
-  fair
-  poor
+model Department {
+  id      String                 @id @default(cuid())
+  name    String                 @unique
+  budgets WeekBudget[]
+  members TeamMemberDepartment[]
+  shifts  ScheduleEntry[]        @relation("DepartmentShifts")
 }
 
-model Stuff {
-  id        Int       @id @default(autoincrement())
-  name      String
-  quantity  Int
-  condition Condition @default(good)
-  owner     String
+model WeekBudget {
+  id           String   @id @default(cuid())
+  departmentId String
+  weekStart    DateTime
+  allowedHours Int
+
+  Department Department @relation(fields: [departmentId], references: [id])
+
+  @@unique([departmentId, weekStart])
+}
+
+model TeamMember {
+  id             String                 @id @default(cuid())
+  displayName    String
+  desiredHours   Int
+  availabilities AvailabilityBlock[]
+  departments    TeamMemberDepartment[]
+  shifts         ScheduleEntry[]        @relation("MemberShifts")
+}
+
+model TeamMemberDepartment {
+  teamMemberId String
+  departmentId String
+  primary      Boolean @default(false)
+
+  TeamMember TeamMember @relation(fields: [teamMemberId], references: [id])
+  Department Department @relation(fields: [departmentId], references: [id])
+
+  @@id([teamMemberId, departmentId])
+}
+
+model AvailabilityBlock {
+  id           String @id @default(cuid())
+  teamMemberId String
+  dayOfWeek    Int // 0–6
+  startMinutes Int
+  endMinutes   Int
+
+  TeamMember TeamMember @relation(fields: [teamMemberId], references: [id])
+}
+
+model ScheduleEntry {
+  id           String   @id @default(cuid())
+  weekStart    DateTime
+  dayOfWeek    Int
+  startMinutes Int
+  endMinutes   Int
+  departmentId String
+  teamMemberId String
+  userId       String?
+
+  Department Department @relation("DepartmentShifts", fields: [departmentId], references: [id])
+  TeamMember TeamMember @relation("MemberShifts", fields: [teamMemberId], references: [id])
+  User       User?      @relation("UserSchedules", fields: [userId], references: [id])
+}
+
+enum Role {
+  MANAGER
+  VIEWER
 }

@@ -1,46 +1,32 @@
-import { PrismaClient, Role, Condition } from '@prisma/client';
-import { hash } from 'bcrypt';
-import * as config from '../config/settings.development.json';
+import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Seeding the database');
-  const password = await hash('changeme', 10);
-  config.defaultAccounts.forEach(async (account) => {
-    const role = account.role as Role || Role.USER;
-    console.log(`  Creating user: ${account.email} with role: ${role}`);
-    await prisma.user.upsert({
-      where: { email: account.email },
-      update: {},
-      create: {
-        email: account.email,
-        password,
-        role,
-      },
-    });
-    // console.log(`  Created user: ${user.email} with role: ${user.role}`);
+  console.log('Seeding default user…');
+
+  const hashed = await bcrypt.hash('changeme', 10);
+
+  await prisma.user.upsert({
+    where: { email: 'john@foo.com' },
+    update: {},
+    create: {
+      email: 'john@foo.com',
+      name: 'John Foo',
+      hashedPassword: hashed,
+      role: 'MANAGER', // matches the Role enum in your schema
+    },
   });
-  for (const data of config.defaultData) {
-    const condition = data.condition as Condition || Condition.good;
-    console.log(`  Adding stuff: ${JSON.stringify(data)}`);
-    // eslint-disable-next-line no-await-in-loop
-    await prisma.stuff.upsert({
-      where: { id: config.defaultData.indexOf(data) + 1 },
-      update: {},
-      create: {
-        name: data.name,
-        quantity: data.quantity,
-        owner: data.owner,
-        condition,
-      },
-    });
-  }
+
+  console.log('Seed complete.');
 }
+
 main()
-  .then(() => prisma.$disconnect())
-  .catch(async (e) => {
+  .catch((e) => {
     console.error(e);
-    await prisma.$disconnect();
     process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
   });
